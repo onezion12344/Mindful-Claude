@@ -74,3 +74,21 @@ describe('config with a schedule', () => {
     expect(statusLine({ ...DEFAULTS, schedule: 'random' })).toContain('random')
   })
 })
+
+describe('quiet', () => {
+  test('is off by default, so nothing is hidden unless asked', () => {
+    expect(DEFAULTS.quiet).toBe(false)
+  })
+
+  test('/breathe quiet turns the hiding on and off', () => {
+    expect(applyCommand(DEFAULTS, 'quiet on').config.quiet).toBe(true)
+    expect(applyCommand(DEFAULTS, 'quiet off').config.quiet).toBe(false)
+    expect(applyCommand(DEFAULTS, 'quiet').config).toBe(DEFAULTS)
+    expect(applyCommand(DEFAULTS, 'quiet maybe').config).toBe(DEFAULTS)
+  })
+
+  test('the status line says which way it stands', () => {
+    expect(statusLine(DEFAULTS)).toContain('quiet off')
+    expect(statusLine({ ...DEFAULTS, quiet: true })).toContain('quiet on')
+  })
+})

@@ -21,6 +21,12 @@ Changes on top of upstream 2.0.0. Each is off by default except the default exer
 - **Breathing time is recorded.** Each breath logs its length to the transcript and adds to a total that persists across sessions; `/breathe totals` reads it.
 - **`/breathe review on`** asks how the breath felt when it ends.
 - **`/breathe schedule`** picks the exercise per turn: `fixed` (default), `random`, or `day` — the last reads a weekly table in `hooks/breath/exercises.ts` (`WEEK`), editable.
+- **`/breathe quiet on`** hides the work while the breath is up: no tool rows, no command output, no assistant text, only the animation. The rows come back as they were when the breath ends; nothing is lost from the turn's record.
+
+## Keys
+
+The band draws its buttons, so a mouse works. A hotkey only fires once the band
+holds the focus, which `ctrl+x tab` gives it — press it, then `s` / `k` / `p`.
 
 ## Install
 

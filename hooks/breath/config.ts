@@ -19,6 +19,8 @@ export type Config = {
   confirmTimeout: number
   /** Ask how the breathing felt once a breath session ends. */
   review: boolean
+  /** While the breath is up, draw nothing for tool calls, their output and code edits. */
+  quiet: boolean
 }
 
 export const DEFAULTS: Config = {
@@ -31,6 +33,7 @@ export const DEFAULTS: Config = {
   confirm: false,
   confirmTimeout: 3,
   review: false,
+  quiet: false,
 }
 
 /** A config from what the store held, field by field, defaults for the rest. */
@@ -49,13 +52,14 @@ export function readConfig(saved: unknown): Config {
         ? s.confirmTimeout
         : DEFAULTS.confirmTimeout,
     review: typeof s.review === 'boolean' ? s.review : DEFAULTS.review,
+    quiet: typeof s.quiet === 'boolean' ? s.quiet : DEFAULTS.quiet,
   }
 }
 
 export function statusLine(c: Config): string {
   const ex = exerciseOf(c.exercise)
   const how = c.schedule === 'fixed' ? ex.name : `${c.schedule} of ${c.schedule === 'day' ? 'the week' : EXERCISES.map(e => e.name).join(' / ')}`
-  return `breathe: ${c.enabled ? 'on' : 'off'} · ${how} · style ${c.style} · delay ${c.delay}s · spinner ${c.spinner ? 'on' : 'off'} · confirm ${c.confirm ? `on (${c.confirmTimeout}s)` : 'off'} · review ${c.review ? 'on' : 'off'}`
+  return `breathe: ${c.enabled ? 'on' : 'off'} · ${how} · style ${c.style} · delay ${c.delay}s · spinner ${c.spinner ? 'on' : 'off'} · confirm ${c.confirm ? `on (${c.confirmTimeout}s)` : 'off'} · review ${c.review ? 'on' : 'off'} · quiet ${c.quiet ? 'on' : 'off'}`
 }
 
 export const HELP = [
@@ -71,6 +75,7 @@ export const HELP = [
   '/breathe confirm on|off  ask Start / Skip first; unpressed starts by itself',
   '/breathe confirm <s>   seconds the Start / Skip buttons wait (default 3)',
   '/breathe review on|off  ask how the breathing felt when it ends',
+  '/breathe quiet on|off  draw nothing for tool calls and edits while breathing',
   '/breathe totals        breathing time recorded so far',
 ].join('\n')
 
@@ -147,6 +152,13 @@ export function applyCommand(config: Config, args: string): { config: Config; te
       return { config: next, text: statusLine(next) }
     }
     return { config, text: 'breathe: confirm on | off | <seconds>' }
+  }
+  if (head === 'quiet') {
+    if (arg === 'on' || arg === 'off') {
+      const next = { ...config, quiet: arg === 'on' }
+      return { config: next, text: statusLine(next) }
+    }
+    return { config, text: 'breathe: quiet on or off' }
   }
   if (head === 'review') {
     if (arg === 'on' || arg === 'off') {

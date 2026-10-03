@@ -88,6 +88,10 @@ const togglePause = (now: number) => {
   }
 }
 
+/** True while a breath is up and should be the only thing on screen. */
+const hushing = (): boolean => config.quiet && (turn !== undefined || finishing !== undefined) && !paused
+
+
 const log = ($: { ui: { log: (text: string) => void } }, what: string) => (err: unknown) => $.ui.log(`mindful-claude: ${what}: ${err}`)
 
 export const register: Register = on => {
@@ -162,18 +166,6 @@ export const register: Register = on => {
     paused = false
     $.ui.invalidate('ui.render')
     return r
-  })
-
-  // the buttons' own hotkeys and clicks reach here as well; each acts, then redraws
-  on('ui.press', async ($, e, next) => {
-    const key = e.element
-    if (key !== 'breathe:start' && key !== 'breathe:skip' && key !== 'breathe:pause') return next(e)
-    const now = await $.clock.now()
-    if (key === 'breathe:start') startBreath(now)
-    else if (key === 'breathe:skip') skipBreath()
-    else togglePause(now)
-    $.ui.invalidate('ui.render')
-    return { element: key }
   })
 
   // the band posts its phase whenever the line changes (once a second): the spinner reads it
@@ -252,5 +244,35 @@ export const register: Register = on => {
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     if (!config.enabled || !config.spinner || !phase) return next(e)
     return next({ ...e, props: { ...e.props, message: phase.word } })
+  })
+
+  // with `/breathe quiet on`, a breath in progress draws nothing for the work going on:
+  // no tool rows, no command output, no assistant text. The rows are not gone — they
+  // redraw as they were once the breath is over, and the turn's own record is untouched.
+  // `on` resolves its event per component, so each row gets its own hook
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
+    if (!hushing()) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
+    if (!hushing()) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => {
+    if (!hushing()) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
+    if (!hushing()) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    if (!hushing()) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
   })
 }
