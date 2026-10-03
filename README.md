@@ -10,6 +10,18 @@ Every prompt you send gives you 10 to 60+ seconds of waiting. This Claude Mod tu
 
 Slow breathing at about 5.5 breaths per minute raises heart rate variability (HRV), a marker of stress resilience. Even short sessions lower cortisol and sharpen focus. Every Claude turn becomes a micro-session, and you never leave the terminal.
 
+## Fork changes
+
+Changes on top of upstream 2.0.0. Each is off by default except the default exercise.
+
+- **The default exercise is now `box`** (4-4-4-4) rather than `hrv`.
+- **A breath finishes its cycle.** Upstream hides the band the moment the turn ends, which can cut an animation off mid-inhale. Here the band stays until the breath in progress completes, then goes. Worst case is one extra cycle.
+- **`/breathe confirm on`** asks `Start now` / `Skip` (keys `s` / `k`) before the breath begins. Pressing nothing starts it — a choice not made is a start.
+- **`/breathe pause` is a button in the band** (key `p`), and it really stops the animation: the Client's frame timer is cancelled, so the breath holds where it is. Time spent paused is not counted as breathing.
+- **Breathing time is recorded.** Each breath logs its length to the transcript and adds to a total that persists across sessions; `/breathe totals` reads it.
+- **`/breathe review on`** asks how the breath felt when it ends.
+- **`/breathe schedule`** picks the exercise per turn: `fixed` (default), `random`, or `day` — the last reads a weekly table in `hooks/breath/exercises.ts` (`WEEK`), editable.
+
 ## Install
 
 Needs Claude Code 2.1.269 or later. Claude Mods are in early access, so turn them on in `~/.claude/settings.json`:

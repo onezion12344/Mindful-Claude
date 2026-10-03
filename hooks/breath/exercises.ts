@@ -38,6 +38,45 @@ export const resolveExercise = (word: string): ExerciseKey | undefined => ALIASE
 
 export const exerciseOf = (key: unknown): Exercise => EXERCISES.find(e => e.key === key) ?? EXERCISES[0]!
 
+/**
+ * How the exercise for a turn is chosen. `fixed` always uses `config.exercise`;
+ * `random` and `day` pick one per turn, so a session does not settle into one rhythm.
+ */
+export type Schedule = 'fixed' | 'random' | 'day'
+
+export const SCHEDULES: readonly Schedule[] = ['fixed', 'random', 'day']
+
+export const isSchedule = (value: unknown): value is Schedule =>
+  typeof value === 'string' && (SCHEDULES as readonly string[]).includes(value)
+
+/**
+ * The exercise one turn of week `day` (0 = Sunday) breathes. A plain weekly shape:
+ * a steady start, a mid-week stretch, an easier Friday, and a longer weekend.
+ * Edit this table to make the week yours.
+ */
+export const WEEK: readonly ExerciseKey[] = [
+  'hrv', // Sunday — unhurried, coherent
+  'box', // Monday — focus for the week ahead
+  'box', // Tuesday
+  'sigh', // Wednesday — mid-week, a longer exhale
+  'box', // Thursday
+  '478', // Friday — let the week go
+  'hrv', // Saturday — rest
+]
+
+/** The exercise a turn breathes under `schedule`; `random` takes an optional draw. */
+export function pickExercise(
+  schedule: Schedule,
+  fixed: ExerciseKey,
+  draw: () => number = Math.random,
+  day: number = new Date().getDay(),
+): ExerciseKey {
+  if (schedule === 'fixed') return fixed
+  if (schedule === 'day') return WEEK[((day % 7) + 7) % 7] ?? fixed
+  const keys = EXERCISES.map(e => e.key)
+  return keys[Math.floor(draw() * keys.length) % keys.length] ?? fixed
+}
+
 export const cycleMs = (ex: Exercise): number => ex.inhaleMs + ex.hold1Ms + ex.exhaleMs + ex.hold2Ms
 
 export type PhaseLabel = 'Breathe in' | 'Sip in' | 'Hold' | 'Breathe out'

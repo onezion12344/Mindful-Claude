@@ -10,8 +10,8 @@ import { centre, frame, isStyle, type Style } from './breath/shapes.ts'
 //
 // Never name a local `h` here: every JSX tag compiles to a call of `h`.
 
-type Props = { exercise?: string; style?: string; elapsedMs?: number } | undefined
-type State = { tick: number; offsetMs: number; line: string }
+type Props = { exercise?: string; style?: string; elapsedMs?: number; paused?: boolean } | undefined
+type State = { tick: number; offsetMs: number; line: string; paused?: boolean; stop?: () => void }
 
 const COLOR = '#f7835d' // Claude orange
 const TICK_MS = 100
@@ -20,23 +20,48 @@ export default function Breathe(props: Props, surface: ClientSurface<State>) {
   const { Box, Text } = surface.elements
   const exercise = exerciseOf(props?.exercise)
   const style: Style = isStyle(props?.style) ? props.style : 'pulse'
+  const paused = props?.paused === true
 
   if (surface.state === undefined) {
     // elapsedMs says how far into the turn the band mounted (a delay); the clock runs from there
-    surface.setState({ tick: 0, offsetMs: props?.elapsedMs ?? 0, line: '' })
-    surface.every(TICK_MS, () => {
-      const s = surface.state
-      if (!s) return
-      const tick = s.tick + 1
-      const next = phaseAt(exercise, s.offsetMs + tick * TICK_MS)
+    surface.setState({ tick: 0, offsetMs: props?.elapsedMs ?? 0, line: '', paused })
+  }
+  const s = surface.state!
+
+  // the pause is held here, not by the caller: the tick below owns the elapsed time, so
+  // freezing the drawing needs the timer itself stopped
+  if (paused !== s.paused) {
+    if (paused) {
+      s.stop?.()
+      surface.setState({ ...s, paused: true, stop: undefined })
+    } else {
+      const stop = surface.every(TICK_MS, () => {
+        const cur = surface.state
+        if (!cur || cur.paused) return
+        const tick = cur.tick + 1
+        const next = phaseAt(exercise, cur.offsetMs + tick * TICK_MS)
+        const line = phaseLine(next)
+        if (line !== cur.line) surface.post({ word: spinnerWord(next), exercise: exercise.name })
+        surface.setState({ ...cur, tick, line })
+      })
+      surface.setState({ ...s, paused: false, stop })
+    }
+  } else if (!paused && s.stop === undefined) {
+    // mounted unpaused but the timer was never started (a props change remounts nothing)
+    const stop = surface.every(TICK_MS, () => {
+      const cur = surface.state
+      if (!cur || cur.paused) return
+      const tick = cur.tick + 1
+      const next = phaseAt(exercise, cur.offsetMs + tick * TICK_MS)
       const line = phaseLine(next)
-      if (line !== s.line) surface.post({ word: spinnerWord(next), exercise: exercise.name })
-      surface.setState({ tick, offsetMs: s.offsetMs, line })
+      if (line !== cur.line) surface.post({ word: spinnerWord(next), exercise: exercise.name })
+      surface.setState({ ...cur, tick, line })
     })
+    surface.setState({ ...s, stop })
   }
 
-  const s = surface.state
-  const elapsed = (s?.offsetMs ?? 0) + (s?.tick ?? 0) * TICK_MS
+  const state = surface.state!
+  const elapsed = (state?.offsetMs ?? 0) + (state?.tick ?? 0) * TICK_MS
   const phase = phaseAt(exercise, elapsed)
   const width = surface.columns || 80
   const rows = surface.rows || 9

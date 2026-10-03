@@ -1,19 +1,37 @@
 // The plugin's settings and the /breathe command that changes them. Pure: `bun test` covers it.
 
-import { EXERCISES, exerciseOf, isExerciseKey, resolveExercise, type ExerciseKey } from './exercises.ts'
+import { EXERCISES, exerciseOf, isExerciseKey, isSchedule, resolveExercise, type ExerciseKey, type Schedule } from './exercises.ts'
 import { STYLES, isStyle, type Style } from './shapes.ts'
 
 export type Config = {
   enabled: boolean
   exercise: ExerciseKey
+  /** How the exercise for a turn is chosen: always `exercise`, or a new one each turn. */
+  schedule: Schedule
   style: Style | 'random'
   /** Seconds Claude works before the band appears; 0 shows it at once. */
   delay: number
   /** Whether the spinner line reads the breath's phase too. */
   spinner: boolean
+  /** Ask with Start / Skip before the breath begins; unpressed starts on its own. */
+  confirm: boolean
+  /** Seconds the Start / Skip buttons wait before the breath starts by itself. */
+  confirmTimeout: number
+  /** Ask how the breathing felt once a breath session ends. */
+  review: boolean
 }
 
-export const DEFAULTS: Config = { enabled: true, exercise: 'hrv', style: 'random', delay: 0, spinner: true }
+export const DEFAULTS: Config = {
+  enabled: true,
+  exercise: 'box',
+  schedule: 'fixed',
+  style: 'random',
+  delay: 0,
+  spinner: true,
+  confirm: false,
+  confirmTimeout: 3,
+  review: false,
+}
 
 /** A config from what the store held, field by field, defaults for the rest. */
 export function readConfig(saved: unknown): Config {
@@ -21,24 +39,39 @@ export function readConfig(saved: unknown): Config {
   return {
     enabled: typeof s.enabled === 'boolean' ? s.enabled : DEFAULTS.enabled,
     exercise: isExerciseKey(s.exercise) ? s.exercise : DEFAULTS.exercise,
+    schedule: isSchedule(s.schedule) ? s.schedule : DEFAULTS.schedule,
     style: s.style === 'random' || isStyle(s.style) ? s.style : DEFAULTS.style,
     delay: typeof s.delay === 'number' && s.delay >= 0 && Number.isFinite(s.delay) ? s.delay : DEFAULTS.delay,
     spinner: typeof s.spinner === 'boolean' ? s.spinner : DEFAULTS.spinner,
+    confirm: typeof s.confirm === 'boolean' ? s.confirm : DEFAULTS.confirm,
+    confirmTimeout:
+      typeof s.confirmTimeout === 'number' && s.confirmTimeout > 0 && Number.isFinite(s.confirmTimeout)
+        ? s.confirmTimeout
+        : DEFAULTS.confirmTimeout,
+    review: typeof s.review === 'boolean' ? s.review : DEFAULTS.review,
   }
 }
 
 export function statusLine(c: Config): string {
   const ex = exerciseOf(c.exercise)
-  return `breathe: ${c.enabled ? 'on' : 'off'} · ${ex.name} (${ex.pattern}) · style ${c.style} · delay ${c.delay}s · spinner ${c.spinner ? 'on' : 'off'}`
+  const how = c.schedule === 'fixed' ? ex.name : `${c.schedule} of ${c.schedule === 'day' ? 'the week' : EXERCISES.map(e => e.name).join(' / ')}`
+  return `breathe: ${c.enabled ? 'on' : 'off'} · ${how} · style ${c.style} · delay ${c.delay}s · spinner ${c.spinner ? 'on' : 'off'} · confirm ${c.confirm ? `on (${c.confirmTimeout}s)` : 'off'} · review ${c.review ? 'on' : 'off'}`
 }
 
 export const HELP = [
   '/breathe               status',
   '/breathe on | off      show or hide the breathing band while Claude works',
   ...EXERCISES.map(e => `/breathe ${e.key.padEnd(14)}${e.name}: ${e.pattern}`),
+  '/breathe schedule fixed  always use the exercise above',
+  '/breathe schedule random  a different exercise each turn',
+  '/breathe schedule day     the exercise this weekday calls for',
   `/breathe style <name>  ${STYLES.join(', ')} or random`,
   '/breathe delay <s>     seconds Claude works before the band appears (0 = at once)',
   '/breathe spinner on|off  read the phase in the spinner line too',
+  '/breathe confirm on|off  ask Start / Skip first; unpressed starts by itself',
+  '/breathe confirm <s>   seconds the Start / Skip buttons wait (default 3)',
+  '/breathe review on|off  ask how the breathing felt when it ends',
+  '/breathe totals        breathing time recorded so far',
 ].join('\n')
 
 /** Applies one `/breathe` invocation; returns the new config and the transcript line. */
@@ -83,5 +116,46 @@ export function applyCommand(config: Config, args: string): { config: Config; te
     }
     return { config, text: 'breathe: spinner on or off' }
   }
+  if (head === 'schedule') {
+    if (isSchedule(arg)) {
+      const next = { ...config, schedule: arg }
+      return { config: next, text: statusLine(next) }
+    }
+    if (arg === 'week' || arg === 'weekly') {
+      const next = { ...config, schedule: 'day' as Schedule }
+      return { config: next, text: statusLine(next) }
+    }
+    if (arg === undefined) {
+      const next = { ...config, schedule: 'random' as Schedule }
+      return { config: next, text: statusLine(next) }
+    }
+    return { config, text: 'breathe: schedule fixed | random | day' }
+  }
+  if (head === 'random' || head === 'day' || head === 'week' || head === 'weekly') {
+    const schedule: Schedule = head === 'random' ? 'random' : 'day'
+    const next = { ...config, schedule }
+    return { config: next, text: statusLine(next) }
+  }
+  if (head === 'confirm') {
+    if (arg === 'on' || arg === 'off') {
+      const next = { ...config, confirm: arg === 'on' }
+      return { config: next, text: statusLine(next) }
+    }
+    const secs = Number(arg)
+    if (arg !== undefined && Number.isFinite(secs) && secs > 0) {
+      const next = { ...config, confirmTimeout: secs }
+      return { config: next, text: statusLine(next) }
+    }
+    return { config, text: 'breathe: confirm on | off | <seconds>' }
+  }
+  if (head === 'review') {
+    if (arg === 'on' || arg === 'off') {
+      const next = { ...config, review: arg === 'on' }
+      return { config: next, text: statusLine(next) }
+    }
+    return { config, text: 'breathe: review on or off' }
+  }
+  // `totals` is answered in register.tsx, where the store is reachable
+  if (head === 'totals') return { config, text: '' }
   return { config, text: `breathe: no setting called "${head}"\n${HELP}` }
 }
